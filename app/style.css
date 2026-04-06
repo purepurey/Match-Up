@@ -1,0 +1,5 @@
+@import "tailwindcss";
+
+.db {
+    border: 2px solid salmon !important;
+}
