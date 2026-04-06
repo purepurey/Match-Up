@@ -55,13 +55,14 @@ function formatLocation(address: Record<string, string> | undefined, displayName
   return displayName;
 }
 
-function createCustomMarker(venue: Venue, opacity: number = 1, isSelected: boolean = false) {
-  const gradientColor = isSelected ? '#fff3e0, #ffe0b2' : '#ffffff, #ffffff';
+// แยก opacity ออกมาเป็น style แทนการ recreate icon ใหม่ทุกครั้ง
+function createCustomMarker(venue: Venue, isSelected: boolean = false) {
+  const bgColor = isSelected ? 'linear-gradient(135deg, #fff3e0, #ffe0b2)' : 'linear-gradient(135deg, #ffffff, #ffffff)';
   const pulseColor = 'rgba(76, 175, 80, 0.7)';
   const pulseColorTransparent = 'rgba(76, 175, 80, 0)';
-  const animationName = `pulse-marker-${venue.id}-${Date.now()}`;
+  // ใช้ id เฉยๆ ไม่ใส่ Date.now() เพราะทำให้ animation reset ทุกครั้ง
+  const animationName = `pulse-${venue.id}`;
 
-  {/* Marker & Animation*/}
   const html = `
     <style>
       @keyframes ${animationName} {
@@ -69,23 +70,26 @@ function createCustomMarker(venue: Venue, opacity: number = 1, isSelected: boole
         50%  { box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 10px ${pulseColorTransparent}; }
         100% { box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 0 ${pulseColor}; }
       }
-      .marker-circle { animation: ${animationName} 2s infinite; }
+      .marker-circle-${venue.id} { animation: ${animationName} 2s infinite; }
     </style>
-    <div style="width:80px; text-align:center; cursor:pointer; opacity:${opacity}; transition:opacity 0.3s ease;">
-      <div class="marker-circle" style="
+    <div style="width:80px; text-align:center; cursor:pointer;">
+      <div class="marker-circle-${venue.id}" style="
         width:60px; height:60px; margin:0 auto 4px;
-        background:linear-gradient(135deg,${gradientColor});
+        background:${bgColor};
         border-radius:50%; display:flex; align-items:center; justify-content:center;
         border:1px solid black; position:relative;">
         <div style="font-size:28px;">${venue.icon}</div>
       </div>
       <div style="
-        background:#fff; color:black; padding:4px 8px;
+        background:#fff; color:black; padding:0px 4px;
         border-radius:100px; border:1px solid #000;
         font-size:12px; font-weight:600;
         display:flex; align-items:center; justify-content:center;
-        gap:3px; white-space:nowrap;">
-        👤 ${venue.count}/${venue.total}
+        gap:4px; white-space:nowrap;">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+          <path fill-rule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clip-rule="evenodd" />
+        </svg>
+        ${venue.count}/${venue.total}
       </div>
     </div>
   `;
@@ -134,13 +138,25 @@ export default function MapClient() {
     return () => clearInterval(interval);
   }, [selectedVenue]);
 
+  // อัพเดท opacity โดยใช้ setOpacity แทนการ recreate icon
   useEffect(() => {
     markersRef.current.forEach((marker, idx) => {
       const venue = SAMPLE_VENUES[idx];
-      const isSelected = selectedVenue?.id === venue.id;
-      marker.setIcon(createCustomMarker(venue, markerOpacity, isSelected));
+      if (!venue) return;
+      // setOpacity สำหรับ fade ตาม zoom
+      (marker as any).setOpacity(markerOpacity);
     });
-  }, [selectedVenue, markerOpacity]);
+  }, [markerOpacity]);
+
+  // อัพเดท icon เฉพาะเมื่อ selectedVenue เปลี่ยน
+  useEffect(() => {
+    markersRef.current.forEach((marker, idx) => {
+      const venue = SAMPLE_VENUES[idx];
+      if (!venue) return;
+      const isSelected = selectedVenue?.id === venue.id;
+      marker.setIcon(createCustomMarker(venue, isSelected));
+    });
+  }, [selectedVenue]);
 
   useEffect(() => {
     if (map.current) return;
@@ -157,7 +173,7 @@ export default function MapClient() {
 
     SAMPLE_VENUES.forEach((venue) => {
       const marker = L.marker([venue.lat, venue.lon], {
-        icon: createCustomMarker(venue, 1),
+        icon: createCustomMarker(venue, false),
       }).addTo(map.current!);
 
       marker.on('click', () => {
@@ -169,14 +185,23 @@ export default function MapClient() {
       markersRef.current.push(marker);
     });
 
-    map.current.on('move', updatePopupPosition);
-    map.current.on('zoom', updatePopupPosition);
-    map.current.on('zoom', () => {
+    const handleMove = () => {
+      if (!selectedVenue) return;
+      const point = map.current!.latLngToContainerPoint([selectedVenue.lat, selectedVenue.lon]);
+      setPopupPos({ x: point.x, y: point.y });
+    };
+
+    const handleZoom = () => {
       const zoom = map.current?.getZoom() || 13;
       setZoomLevel(zoom);
-    });
+    };
+
+    map.current.on('move', handleMove);
+    map.current.on('zoom', handleZoom);
 
     return () => {
+      markersRef.current.forEach(marker => marker.remove());
+      markersRef.current = [];
       map.current?.remove();
       map.current = null;
     };
@@ -263,8 +288,8 @@ export default function MapClient() {
             {/* Search Button */}
             <button
               type={showInput ? 'submit' : 'button'}
-              onClick={() => { if (!showInput) setShowInput(true) }}
-              className="flex-shrink-0 p-1 rounded-full hover:bg-gray-100 transition-colors border border-gray-950 p-2"
+              onClick={() => { if (!showInput) setShowInput(true); }}
+              className="flex-shrink-0 rounded-full hover:bg-gray-100 transition-colors border border-gray-950 p-2 bg-white"
             >
               {isSearching ? (
                 <span className="text-xs text-gray-500">...</span>
@@ -281,60 +306,70 @@ export default function MapClient() {
       </div>
 
       {/* Popup Card */}
-      {selectedVenue && (
-        <div
-          className="fixed w-80 z-[99999] pointer-events-auto transition-opacity duration-300"
-          style={{
-            left: `${popupPos.x}px`,
-            top: `${popupPos.y}px`,
-            transform: 'translate(16px, -50%)',
-            opacity: markerOpacity,
-          }}
-        >
-          <div className="bg-white rounded-xl overflow-hidden shadow-xl">
-            <div className="relative h-32">
-              <img
-                src={selectedVenue.image}
-                alt={selectedVenue.name}
-                className="w-full h-full object-cover"
-              />
-              <button
-                onClick={() => setSelectedVenue(null)}
-                className="absolute top-2 right-2 bg-white rounded-full w-6 h-6 flex items-center justify-center shadow-md text-sm text-black font-bold"
-              >
-                ✕
-              </button>
-              {selectedVenue.isActive && (
-                <div className="absolute top-2 left-2 bg-green-400 text-white px-2 py-0.5 rounded-full text-xs font-semibold">
-                  ACTIVE NOW
-                </div>
-              )}
-            </div>
-            <div className="p-3">
-              <h3 className="font-bold text-sm mb-1 text-slate-900">{selectedVenue.name}</h3>
-              <p className="text-xs text-gray-600 mb-2.5">{selectedVenue.nameEn}</p>
-              <div className="flex items-center gap-2 mb-3 text-sm font-bold text-slate-900">
-                <span>👤</span>
-                <span>{selectedVenue.count}/{selectedVenue.total}</span>
-              </div>
-              <div className="flex gap-2">
-                <button className="flex-1 border border-slate-900 text-slate-900 py-1.5 px-2 rounded-full font-semibold text-xs hover:bg-slate-50">
-                  DETAILS
-                </button>
-                <button className="flex-1 bg-green-400 text-white py-1.5 px-2 rounded-full font-semibold text-xs hover:bg-green-500">
-                  JOIN NOW
-                </button>
-              </div>
-            </div>
+{selectedVenue && (
+  <div
+    className="fixed w-[420px] z-[99999] pointer-events-auto transition-opacity duration-300" // 1. เพิ่มความกว้างการ์ด (จาก w-80 เป็น 420px หรือตามต้องการ)
+    style={{
+      left: `${popupPos.x}px`,
+      top: `${popupPos.y}px`,
+      transform: 'translate(50px, -72%)',
+      opacity: markerOpacity,
+    }}
+  >
+    <div className="bg-white rounded-xl overflow-hidden shadow-xl flex flex-row border border-black"> {/* 2. เพิ่มเส้นขอบดำรอบการ์ด */}
+      
+      {/* ฝั่งซ้าย: รูปภาพ */}
+      <div className="relative w-1/2 h-44 flex flex-row"> {/* 3. กำหนดความกว้างรูปเป็น 50% และเพิ่มความสูง h-44 */}
+        <img
+          src={selectedVenue.image}
+          alt={selectedVenue.name}
+          className="w-full h-full object-cover border-r border-black" // เพิ่มเส้นขอบขวาคั่นกลาง
+        />
+      </div>
+
+      {/* ฝั่งขวา: เนื้อหา */}
+      <div className="w-1/2 p-2 flex flex-col justify-between relative bg-[#FDFCF7]"> {/* 4. ใส่สีพื้นหลังครีมอ่อนๆ และใช้ flex-col กระจายเนื้อหา */}
+        
+        {/* ส่วนหัว: Active Now */}
+        <div>
+          <div className="inline-block bg-[#98B661] text-white px-2 py-1 rounded-full text-[8px] font-bold border border-black mb-2">
+            ACTIVE NOW!
+          </div>
+          <h3 className="font-bold text-[18px] text-slate-900 leading-tight">{selectedVenue.name}</h3>
+          <p className="text-[12px] text-gray-500 font-bold">{selectedVenue.nameEn}</p>
+        </div>
+
+        {/* ส่วนล่าง: จำนวนคน และ ปุ่ม */}
+        <div className="flex flex-col gap-3">
+          <div className="bg-black flex items-center justify-center gap-2 text-[10px] font-bold text-white w-max px-4 py-1.5 rounded-full">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="11" height="11">
+              <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
+            </svg>
+            <span>{selectedVenue.count}/{selectedVenue.total}</span>
+          </div>
+
+          <div className="flex gap-2">
+            <button className="flex-1 bg-[#F3F1E5] border border-black text-black py-2 rounded-full font-bold text-[12px] hover:bg-white">
+              DETAILS
+            </button>
+            <button className="flex-1 bg-[#98B661] border border-black text-white py-2 rounded-full font-bold text-[12px] hover:opacity-90">
+              JOIN NOW
+            </button>
           </div>
         </div>
-      )}
+      </div>
+    </div>
+  </div>
+)}
+
+      {/* Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 z-[9999] bg-[#F3F2EB] border-t border-gray-950 p-2 flex justify-center items-center">
-          <button title ="Create New Event"
-          className='bg-[#F8B347] rounded-full w-12 h-12 flex items-center justify-center text-gray-950 border border-gray-950 p-3'>
-            <span 
-            className="text-sm font-bold text-gray-950 text-[30px]">+</span>
-          </button>
+        <button
+          title="Create New Event"
+          className="bg-[#F8B347] rounded-full w-12 h-12 flex items-center justify-center text-gray-950 border border-gray-950"
+        >
+          <span className="font-bold text-[24px] leading-none">+</span>
+        </button>
       </div>
     </>
   );
