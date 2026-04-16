@@ -2,8 +2,8 @@ import Link from 'next/link'
 
 export default function LoginPage() {
   return (
-    <main className="relative w-full min-h-screen bg-[#89BFC4] flex flex-col px-6 pb-8 overflow-hidden">
-
+    <main className="w-full min-h-screen bg-[#89BFC4] flex justify-center">
+    <div className="w-full max-w-md px-6 pb-8 flex flex-col">
       {/* Hero Image Area */}
       <div className="relative flex justify-center items-center mt-4 mb-6" style={{ height: 280 }}>
         <img 
@@ -79,7 +79,7 @@ export default function LoginPage() {
         Don't you have an account?{' '}
         <Link href="/signup" className="text-[#1E4AE9] font-medium">Sign up</Link>
       </p>
-
+      </div>
     </main>
   )
 }
