@@ -307,6 +307,13 @@ export default function MapClient() {
 
       {/* Popup Card */}
 {selectedVenue && (
+  <div 
+    className="fixed inset-0 z-[99998]"
+    onClick={() => setSelectedVenue(null)}
+    />
+  )}
+
+{selectedVenue && (
   <div
     className="fixed w-[420px] z-[99999] pointer-events-auto transition-opacity duration-300" // 1. เพิ่มความกว้างการ์ด (จาก w-80 เป็น 420px หรือตามต้องการ)
     style={{
