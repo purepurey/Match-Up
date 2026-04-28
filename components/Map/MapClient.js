@@ -3,6 +3,7 @@
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
@@ -11,6 +12,9 @@ const SAMPLE_VENUES = [
     id: '1',
     name: 'หาตี้เล่นบาส 5v5 ครับ',
     nameEn: 'Urupong Basketball Court',
+    location: 'Urupong, Bangkok',
+    category: 'BASKETBALL',
+    dateTime: '30 MAR 16:00 - 18:00',
     lat: 13.7563,
     lon: 100.5018,
     count: 1,
@@ -23,6 +27,9 @@ const SAMPLE_VENUES = [
     id: '2',
     name: 'หาคนแทงสนุ๊กเดือดๆคับ',
     nameEn: 'Playbox',
+    location: 'Siam, Bangkok',
+    category: 'SNOOKER',
+    dateTime: '30 MAR 19:00 - 22:00',
     lat: 13.76,
     lon: 100.53,
     count: 4,
@@ -91,6 +98,7 @@ function createCustomMarker(venue, isSelected = false) {
 }
 
 export default function MapClient() {
+  const router = useRouter();
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markersRef = useRef([]);
@@ -102,6 +110,73 @@ export default function MapClient() {
   const [selectedVenue, setSelectedVenue] = useState(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const [zoomLevel, setZoomLevel] = useState(13);
+  const [detailVenue, setDetailVenue] = useState(null);
+  // เก็บ venues ทั้งหมด (sample + user-created จาก localStorage)
+  const [allVenues, setAllVenues] = useState(SAMPLE_VENUES);
+  // event ที่ user สร้างไว้ (มีได้ครั้งละ 1) — null ถ้ายังไม่มี
+  const [activeUserVenue, setActiveUserVenue] = useState(null);
+  // event ที่ user เพิ่ง join (มีได้ครั้งละ 1) — null ถ้ายังไม่ได้ join
+  const [activeJoinedVenue, setActiveJoinedVenue] = useState(null);
+
+  function openDetail(venue) {
+    setSelectedVenue(null); // ปิด popup เล็ก
+    setDetailVenue(venue);  // เปิด bottom sheet
+  }
+  function closeDetail() {
+    setDetailVenue(null);
+  }
+
+  // คลิกที่ active event card → pan ไปที่ตำแหน่ง + เปิด popup เล็ก
+  function focusActiveVenue() {
+    if (!activeUserVenue || !map.current) return;
+    map.current.setView([activeUserVenue.lat, activeUserVenue.lon], 15);
+    setSelectedVenue(activeUserVenue);
+    const point = map.current.latLngToContainerPoint([activeUserVenue.lat, activeUserVenue.lon]);
+    setPopupPos({ x: point.x, y: point.y });
+  }
+
+  // กด JOIN NOW — บาสไปเล่น minigame, กีฬาอื่น join ตรงๆ
+  function handleJoinNow(venue) {
+    if (!venue) return;
+    if (activeJoinedVenue) return; // อยู่ใน event อื่นแล้ว — กันซ้อน
+    const isBasketball =
+      venue.category?.toUpperCase() === 'BASKETBALL' || venue.icon === '🏀';
+    if (isBasketball) {
+      try { localStorage.setItem('pendingJoinVenue', JSON.stringify(venue)); } catch {}
+      setSelectedVenue(null);
+      setDetailVenue(null);
+      router.push('/joinbasketball');
+    } else {
+      try { localStorage.setItem('activeJoinedVenue', JSON.stringify(venue)); } catch {}
+      setActiveJoinedVenue(venue);
+      setSelectedVenue(null);
+      setDetailVenue(null);
+    }
+  }
+
+  // กด LEAVE — ออกจาก event ที่ join อยู่
+  function handleLeave() {
+    if (!activeJoinedVenue) return;
+    if (selectedVenue?.id === activeJoinedVenue.id) setSelectedVenue(null);
+    if (detailVenue?.id === activeJoinedVenue.id) setDetailVenue(null);
+    setActiveJoinedVenue(null);
+    try { localStorage.removeItem('activeJoinedVenue'); } catch {}
+  }
+
+  // ลบ event ที่ user สร้าง — เอา marker ออก, ล้าง localStorage, ล้าง state
+  function removeActiveVenue() {
+    if (!activeUserVenue) return;
+    const idx = markersRef.current.findIndex((m) => m.venueId === activeUserVenue.id);
+    if (idx >= 0) {
+      markersRef.current[idx].remove();
+      markersRef.current.splice(idx, 1);
+    }
+    setAllVenues((prev) => prev.filter((v) => v.id !== activeUserVenue.id));
+    if (selectedVenue?.id === activeUserVenue.id) setSelectedVenue(null);
+    if (detailVenue?.id === activeUserVenue.id) setDetailVenue(null);
+    setActiveUserVenue(null);
+    try { localStorage.removeItem('activeUserVenue'); } catch {}
+  }
 
   const calculateOpacity = (zoom) => {
     const minFadeZoom = 8;
@@ -128,7 +203,7 @@ export default function MapClient() {
   // อัพเดท opacity โดยใช้ setOpacity แทนการ recreate icon
   useEffect(() => {
     markersRef.current.forEach((marker, idx) => {
-      const venue = SAMPLE_VENUES[idx];
+      const venue = allVenues[idx];
       if (!venue) return;
       // setOpacity สำหรับ fade ตาม zoom
       marker.setOpacity(markerOpacity);
@@ -138,7 +213,7 @@ export default function MapClient() {
   // อัพเดท icon เฉพาะเมื่อ selectedVenue เปลี่ยน
   useEffect(() => {
     markersRef.current.forEach((marker, idx) => {
-      const venue = SAMPLE_VENUES[idx];
+      const venue = allVenues[idx];
       if (!venue) return;
       const isSelected = selectedVenue?.id === venue.id;
       marker.setIcon(createCustomMarker(venue, isSelected));
@@ -158,10 +233,28 @@ export default function MapClient() {
 
     map.current.invalidateSize();
 
-    SAMPLE_VENUES.forEach((venue) => {
+    // อ่าน active user venue + active joined venue จาก localStorage
+    let userVenue = null;
+    let joinedVenue = null;
+    try {
+      const raw = localStorage.getItem('activeUserVenue');
+      if (raw) userVenue = JSON.parse(raw);
+    } catch {}
+    try {
+      const raw = localStorage.getItem('activeJoinedVenue');
+      if (raw) joinedVenue = JSON.parse(raw);
+    } catch {}
+
+    const venuesToRender = userVenue ? [...SAMPLE_VENUES, userVenue] : SAMPLE_VENUES;
+    setAllVenues(venuesToRender);
+    setActiveUserVenue(userVenue);
+    setActiveJoinedVenue(joinedVenue);
+
+    venuesToRender.forEach((venue) => {
       const marker = L.marker([venue.lat, venue.lon], {
         icon: createCustomMarker(venue, false),
       }).addTo(map.current);
+      marker.venueId = venue.id; // ใช้หา marker เวลาลบ
 
       marker.on('click', () => {
         setSelectedVenue(venue);
@@ -183,8 +276,14 @@ export default function MapClient() {
       setZoomLevel(zoom);
     };
 
+    const handleMapClick = () => {
+      // คลิกที่ map ว่างๆ (ไม่ใช่ marker) → ปิด popup
+      setSelectedVenue(null);
+    };
+
     map.current.on('move', handleMove);
     map.current.on('zoom', handleZoom);
+    map.current.on('click', handleMapClick);
 
     return () => {
       markersRef.current.forEach(marker => marker.remove());
@@ -292,14 +391,7 @@ export default function MapClient() {
         </form>
       </div>
 
-      {/* Popup Card */}
-{selectedVenue && (
-  <div
-    className="fixed inset-0 z-[99998]"
-    onClick={() => setSelectedVenue(null)}
-    />
-  )}
-
+      {/* Popup Card — ไม่มี overlay ทับ map แล้ว ลาก/zoom map ได้ตามปกติ */}
 {selectedVenue && (
   <div
     className="fixed w-[420px] z-[99999] pointer-events-auto transition-opacity duration-300" // 1. เพิ่มความกว้างการ์ด (จาก w-80 เป็น 420px หรือตามต้องการ)
@@ -310,15 +402,33 @@ export default function MapClient() {
       opacity: markerOpacity,
     }}
   >
+    {/* ปุ่มปิด popup */}
+    <button
+      type="button"
+      onClick={() => setSelectedVenue(null)}
+      aria-label="Close"
+      className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-white border border-black flex items-center justify-center shadow-md hover:bg-gray-100"
+    >
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M2 2L10 10M10 2L2 10" stroke="#000" strokeWidth="1.8" strokeLinecap="round"/>
+      </svg>
+    </button>
+
     <div className="bg-white rounded-xl overflow-hidden shadow-xl flex flex-row border border-black"> {/* 2. เพิ่มเส้นขอบดำรอบการ์ด */}
 
       {/* ฝั่งซ้าย: รูปภาพ */}
       <div className="relative w-1/2 h-44 flex flex-row"> {/* 3. กำหนดความกว้างรูปเป็น 50% และเพิ่มความสูง h-44 */}
-        <img
-          src={selectedVenue.image}
-          alt={selectedVenue.name}
-          className="w-full h-full object-cover border-r border-black" // เพิ่มเส้นขอบขวาคั่นกลาง
-        />
+        {selectedVenue.image ? (
+          <img
+            src={selectedVenue.image}
+            alt={selectedVenue.name}
+            className="w-full h-full object-cover border-r border-black"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-[#F8B347] to-[#FFD180] border-r border-black flex items-center justify-center text-6xl">
+            {selectedVenue.icon}
+          </div>
+        )}
       </div>
 
       {/* ฝั่งขวา: เนื้อหา */}
@@ -343,12 +453,32 @@ export default function MapClient() {
           </div>
 
           <div className="flex gap-2">
-            <button className="flex-1 bg-[#F3F1E5] border border-black text-black py-2 rounded-full font-bold text-[12px] hover:bg-white">
+            <button
+              type="button"
+              onClick={() => openDetail(selectedVenue)}
+              className="flex-1 bg-[#F3F1E5] border border-black text-black py-2 rounded-full font-bold text-[12px] hover:bg-white"
+            >
               DETAILS
             </button>
-            <button className="flex-1 bg-[#98B661] border border-black text-white py-2 rounded-full font-bold text-[12px] hover:opacity-90">
-              JOIN NOW
-            </button>
+            {!selectedVenue.isUserCreated && (
+              activeJoinedVenue?.id === selectedVenue.id ? (
+                <button
+                  type="button"
+                  onClick={handleLeave}
+                  className="flex-1 bg-[#98B661] border border-black text-white py-2 rounded-full font-bold text-[12px] hover:opacity-90"
+                >
+                  LEAVE
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleJoinNow(selectedVenue)}
+                  className="flex-1 bg-[#98B661] border border-black text-white py-2 rounded-full font-bold text-[12px] hover:opacity-90"
+                >
+                  JOIN NOW
+                </button>
+              )
+            )}
           </div>
         </div>
       </div>
@@ -356,14 +486,202 @@ export default function MapClient() {
   </div>
 )}
 
+      {/* Bottom Sheet (Detail Panel) — slide up from bottom */}
+      <div
+        className={`fixed left-0 right-0 z-[9998] bg-white border border-black rounded-t-3xl shadow-2xl pointer-events-${detailVenue ? 'auto' : 'none'} transition-transform duration-300 ease-out`}
+        style={{
+          bottom: '64px', // ให้อยู่เหนือปุ่ม Create New Event
+          maxHeight: 'calc(100vh - 64px)',
+          transform: detailVenue ? 'translateY(0)' : 'translateY(calc(100% + 80px))',
+        }}
+      >
+        {detailVenue && (
+          <div className="overflow-y-auto" style={{ maxHeight: 'calc(100vh - 64px)' }}>
+            {/* Drag handle */}
+            <button
+              type="button"
+              onClick={closeDetail}
+              aria-label="Close"
+              className="w-full flex justify-center pt-2 pb-1"
+            >
+              <span className="block w-12 h-1.5 rounded-full bg-black" />
+            </button>
+
+            {/* Image */}
+            <div className="px-4 pt-1">
+              {detailVenue.image ? (
+                <img
+                  src={detailVenue.image}
+                  alt={detailVenue.name}
+                  className="w-full h-48 object-cover border border-black rounded-md"
+                />
+              ) : (
+                <div className="w-full h-48 bg-gradient-to-br from-[#F8B347] to-[#FFD180] border border-black rounded-md flex items-center justify-center text-7xl">
+                  {detailVenue.icon}
+                </div>
+              )}
+            </div>
+
+            {/* Title + count */}
+            <div className="px-4 pt-3 flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <h2 className="text-2xl font-extrabold text-black leading-tight break-words">
+                  {detailVenue.name}
+                </h2>
+                <p className="text-sm text-gray-500 font-bold mt-0.5">
+                  {detailVenue.location || detailVenue.nameEn}
+                </p>
+              </div>
+              <div className="bg-black text-white text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1 flex-shrink-0">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="12" height="12">
+                  <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
+                </svg>
+                <span>{detailVenue.count}/{detailVenue.total}</span>
+              </div>
+            </div>
+
+            {/* SpTags */}
+            <div className="px-4 pt-3 flex items-center gap-2 flex-wrap">
+              <div className="bg-[#F8B347] text-black border border-black px-3 py-1.5 text-sm font-extrabold flex items-center gap-1.5 shadow-[0px_3px_0px_0px_rgba(0,0,0,0.25)]">
+                <span>{detailVenue.icon}</span>
+                <span>{detailVenue.category}</span>
+              </div>
+              {detailVenue.isActive && (
+                <div className="bg-[#98B661] text-white border border-black px-3 py-1.5 rounded-full text-sm font-semibold shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)]">
+                  Active now
+                </div>
+              )}
+            </div>
+
+            {/* Date / time */}
+            <div className="px-4 pt-3">
+              <div className="border border-black px-4 py-2 text-xs font-bold text-black inline-block">
+                {detailVenue.dateTime}
+              </div>
+            </div>
+
+            {/* Action button — CANCEL EVENT (เจ้าของ) / LEAVE (กำลัง join) / JOIN NOW (อื่นๆ) */}
+            <div className="px-4 pt-4 pb-5 flex justify-center">
+              {detailVenue.isUserCreated ? (
+                <button
+                  type="button"
+                  onClick={removeActiveVenue}
+                  className="w-2/3 bg-[#EA4335] border border-black text-white font-extrabold text-base py-3 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  CANCEL EVENT
+                </button>
+              ) : activeJoinedVenue?.id === detailVenue.id ? (
+                <button
+                  type="button"
+                  onClick={handleLeave}
+                  className="w-2/3 bg-[#EA4335] border border-black text-white font-extrabold text-base py-3 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  LEAVE
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleJoinNow(detailVenue)}
+                  className="w-2/3 bg-[#98B661] border border-black text-white font-extrabold text-base py-3 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                >
+                  JOIN NOW
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Joined Event Card — ถ้ามี active user venue อยู่ด้วย จะ stack ขึ้นไปด้านบน */}
+      {activeJoinedVenue && (
+        <div
+          className="fixed left-3 right-3 z-[9000] flex justify-center pointer-events-none"
+          style={{ bottom: activeUserVenue ? '170px' : '80px' }}
+        >
+          <div
+            onClick={() => openDetail(activeJoinedVenue)}
+            className="pointer-events-auto bg-white border border-black rounded-full shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] flex items-center gap-3 pl-2 pr-2 py-1.5 max-w-[600px] w-full cursor-pointer hover:shadow-[0px_2px_0px_0px_rgba(0,0,0,0.25)] transition-shadow"
+          >
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#FFE0B2] to-[#FFCC80] border border-black flex items-center justify-center flex-shrink-0">
+              <span className="text-3xl leading-none">{activeJoinedVenue.icon}</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="bg-[#FFCC80] border border-black px-3 py-0.5 rounded-full inline-block text-[11px] font-semibold text-black mb-0.5 italic">
+                Joined
+              </div>
+              <h3 className="text-base font-extrabold text-black truncate leading-tight">
+                {activeJoinedVenue.name}
+              </h3>
+              <p className="text-[10px] text-gray-500 font-bold truncate uppercase">
+                {activeJoinedVenue.location || activeJoinedVenue.nameEn}
+              </p>
+            </div>
+            <div className="bg-black text-white px-3 py-2 rounded-full flex items-center gap-1.5 text-sm font-bold flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+                <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
+              </svg>
+              <span>{activeJoinedVenue.count}/{activeJoinedVenue.total}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Event Card — z ต่ำกว่า details popup (z-9998) เพื่อให้ sheet ทับได้ */}
+      {activeUserVenue && (
+        <div className="fixed bottom-[80px] left-3 right-3 z-[9000] flex justify-center pointer-events-none">
+          <div
+            onClick={() => openDetail(activeUserVenue)}
+            className="pointer-events-auto bg-white border border-black rounded-full shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] flex items-center gap-3 pl-2 pr-2 py-1.5 max-w-[600px] w-full cursor-pointer hover:shadow-[0px_2px_0px_0px_rgba(0,0,0,0.25)] transition-shadow"
+          >
+            {/* Sport icon circle */}
+            <div className="w-14 h-14 rounded-full bg-gradient-to-br from-[#FFE0B2] to-[#FFCC80] border border-black flex items-center justify-center flex-shrink-0">
+              <span className="text-3xl leading-none">{activeUserVenue.icon}</span>
+            </div>
+
+            {/* Middle: pill + name + location */}
+            <div className="flex-1 min-w-0">
+              <div className="bg-[#C5DC8E] border border-black px-3 py-0.5 rounded-full inline-block text-[11px] font-semibold text-black mb-0.5 italic">
+                Active now
+              </div>
+              <h3 className="text-base font-extrabold text-black truncate leading-tight">
+                {activeUserVenue.name}
+              </h3>
+              <p className="text-[10px] text-gray-500 font-bold truncate uppercase">
+                {activeUserVenue.location}
+              </p>
+            </div>
+
+            {/* Right: count badge */}
+            <div className="bg-black text-white px-3 py-2 rounded-full flex items-center gap-1.5 text-sm font-bold flex-shrink-0">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="13" height="13">
+                <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
+              </svg>
+              <span>{activeUserVenue.count}/{activeUserVenue.total}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Nav */}
       <div className="fixed bottom-0 left-0 right-0 z-[9999] bg-[#F3F2EB] border-t border-gray-950 p-2 flex justify-center items-center">
-        <button
-          title="Create New Event"
-          className="bg-[#F8B347] rounded-full w-12 h-12 flex items-center justify-center text-gray-950 border border-gray-950"
-        >
-          <span className="font-bold text-[24px] leading-none">+</span>
-        </button>
+        {activeUserVenue ? (
+          <button
+            type="button"
+            disabled
+            title="You already have an active event"
+            className="bg-[#F8B347]/40 rounded-full w-12 h-12 flex items-center justify-center text-gray-500 border border-gray-400 cursor-not-allowed"
+          >
+            <span className="font-bold text-[24px] leading-none">+</span>
+          </button>
+        ) : (
+          <a
+            href="/create"
+            title="Create New Event"
+            className="bg-[#F8B347] rounded-full w-12 h-12 flex items-center justify-center text-gray-950 border border-gray-950 hover:opacity-90"
+          >
+            <span className="font-bold text-[24px] leading-none">+</span>
+          </a>
+        )}
       </div>
     </>
   );

@@ -1,6 +1,25 @@
+'use client'
+
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { useState } from 'react'
+import { isValidLogin } from './credentials'
 
 export default function LoginPage() {
+  const router = useRouter()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+
+  function handleSignIn(e) {
+    e.preventDefault()
+    if (isValidLogin(email, password)) {
+      router.push('/home')
+    } else {
+      setError('Email หรือ Password ไม่ถูกต้อง')
+    }
+  }
+
   return (
     <main className="w-full min-h-screen bg-[#89BFC4] flex justify-center">
     <div className="w-full max-w-md px-6 pb-8 flex flex-col">
@@ -18,31 +37,47 @@ export default function LoginPage() {
         Today is your game. Go find your match.<br/>Sign in to start playing.
       </p>
 
-      {/* Email */}
-      <label className="text-sm font-medium text-black mb-1">Email</label>
-      <input
-        type="email"
-        placeholder="Example@email.com"
-        className="w-full bg-[#F3F2EB] border border-gray-950 px-4 py-3 text-sm text-gray-500 outline-none mb-4 focus:border-gray-500"
-      />
+      <form onSubmit={handleSignIn}>
+        {/* Email */}
+        <label className="text-sm font-medium text-black mb-1 block">Email</label>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="Example@email.com"
+          className="w-full bg-[#F3F2EB] border border-gray-950 px-4 py-3 text-sm text-black placeholder:text-gray-500 outline-none mb-4 focus:border-gray-500"
+          required
+        />
 
-      {/* Password */}
-      <label className="text-sm font-medium text-black mb-1">Password</label>
-      <input
-        type="password"
-        placeholder="At least 8 characters"
-        className="w-full bg-[#F3F2EB] border border-gray-950 px-4 py-3 text-sm text-gray-500 outline-none mb-2 focus:border-gray-500"
-      />
+        {/* Password */}
+        <label className="text-sm font-medium text-black mb-1 block">Password</label>
+        <input
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="At least 8 characters"
+          className="w-full bg-[#F3F2EB] border border-gray-950 px-4 py-3 text-sm text-black placeholder:text-gray-500 outline-none mb-2 focus:border-gray-500"
+          required
+        />
 
-      {/* Forgot Password */}
-      <div className="flex justify-end mb-4">
-        <a href="#" className="text-sm text-[#1E4AE9]">Forgot Password?</a>
-      </div>
+        {/* Forgot Password */}
+        <div className="flex justify-end mb-4">
+          <a href="#" className="text-sm text-[#1E4AE9]">Forgot Password?</a>
+        </div>
 
-      {/* Sign In Button */}
-      <Link href="/home" className="w-full bg-[#162D3A] text-white py-4 font-light text-base mb-6 block text-center">
-      Sign in
-      </Link>
+        {/* Error */}
+        {error && (
+          <p className="text-sm text-red-600 mb-3 text-center">{error}</p>
+        )}
+
+        {/* Sign In Button */}
+        <button
+          type="submit"
+          className="w-full bg-[#162D3A] text-white py-4 font-light text-base mb-6 block text-center hover:opacity-90"
+        >
+          Sign in
+        </button>
+      </form>
 
       {/* Divider */}
       <div className="flex items-center gap-3 mb-4">
