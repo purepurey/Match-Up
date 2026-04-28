@@ -2,24 +2,11 @@
 
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 
-type Venue = {
-  id: string;
-  name: string;
-  nameEn: string;
-  lat: number;
-  lon: number;
-  count: number;
-  total: number;
-  image: string;
-  icon: string;
-  isActive: boolean;
-};
-
-const SAMPLE_VENUES: Venue[] = [
+const SAMPLE_VENUES = [
   {
     id: '1',
     name: 'หาตี้เล่นบาส 5v5 ครับ',
@@ -46,7 +33,7 @@ const SAMPLE_VENUES: Venue[] = [
   },
 ];
 
-function formatLocation(address: Record<string, string> | undefined, displayName: string) {
+function formatLocation(address, displayName) {
   if (!address) return displayName;
   const city = address.city || address.town || address.village || address.hamlet || address.county;
   const country = address.country;
@@ -56,7 +43,7 @@ function formatLocation(address: Record<string, string> | undefined, displayName
 }
 
 // แยก opacity ออกมาเป็น style แทนการ recreate icon ใหม่ทุกครั้ง
-function createCustomMarker(venue: Venue, isSelected: boolean = false) {
+function createCustomMarker(venue, isSelected = false) {
   const bgColor = isSelected ? 'linear-gradient(135deg, #fff3e0, #ffe0b2)' : 'linear-gradient(135deg, #ffffff, #ffffff)';
   const pulseColor = 'rgba(76, 175, 80, 0.7)';
   const pulseColorTransparent = 'rgba(76, 175, 80, 0)';
@@ -104,19 +91,19 @@ function createCustomMarker(venue: Venue, isSelected: boolean = false) {
 }
 
 export default function MapClient() {
-  const mapContainer = useRef<HTMLDivElement>(null);
-  const map = useRef<L.Map | null>(null);
-  const markersRef = useRef<L.Marker[]>([]);
+  const mapContainer = useRef(null);
+  const map = useRef(null);
+  const markersRef = useRef([]);
   const [query, setQuery] = useState('Bangkok');
   const [locationLabel, setLocationLabel] = useState('Thailand, Bangkok');
   const [error, setError] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [showInput, setShowInput] = useState(false);
-  const [selectedVenue, setSelectedVenue] = useState<Venue | null>(null);
+  const [selectedVenue, setSelectedVenue] = useState(null);
   const [popupPos, setPopupPos] = useState({ x: 0, y: 0 });
   const [zoomLevel, setZoomLevel] = useState(13);
 
-  const calculateOpacity = (zoom: number) => {
+  const calculateOpacity = (zoom) => {
     const minFadeZoom = 8;
     const maxZoom = 13;
     if (zoom >= maxZoom) return 1;
@@ -144,7 +131,7 @@ export default function MapClient() {
       const venue = SAMPLE_VENUES[idx];
       if (!venue) return;
       // setOpacity สำหรับ fade ตาม zoom
-      (marker as any).setOpacity(markerOpacity);
+      marker.setOpacity(markerOpacity);
     });
   }, [markerOpacity]);
 
@@ -174,11 +161,11 @@ export default function MapClient() {
     SAMPLE_VENUES.forEach((venue) => {
       const marker = L.marker([venue.lat, venue.lon], {
         icon: createCustomMarker(venue, false),
-      }).addTo(map.current!);
+      }).addTo(map.current);
 
       marker.on('click', () => {
         setSelectedVenue(venue);
-        const point = map.current!.latLngToContainerPoint([venue.lat, venue.lon]);
+        const point = map.current.latLngToContainerPoint([venue.lat, venue.lon]);
         setPopupPos({ x: point.x, y: point.y });
       });
 
@@ -187,7 +174,7 @@ export default function MapClient() {
 
     const handleMove = () => {
       if (!selectedVenue) return;
-      const point = map.current!.latLngToContainerPoint([selectedVenue.lat, selectedVenue.lon]);
+      const point = map.current.latLngToContainerPoint([selectedVenue.lat, selectedVenue.lon]);
       setPopupPos({ x: point.x, y: point.y });
     };
 
@@ -207,7 +194,7 @@ export default function MapClient() {
     };
   }, []);
 
-  async function handleSearch(e: FormEvent<HTMLFormElement>) {
+  async function handleSearch(e) {
     e.preventDefault();
     const trimQuery = query.trim();
     if (!trimQuery || !map.current) return;
@@ -307,7 +294,7 @@ export default function MapClient() {
 
       {/* Popup Card */}
 {selectedVenue && (
-  <div 
+  <div
     className="fixed inset-0 z-[99998]"
     onClick={() => setSelectedVenue(null)}
     />
@@ -324,7 +311,7 @@ export default function MapClient() {
     }}
   >
     <div className="bg-white rounded-xl overflow-hidden shadow-xl flex flex-row border border-black"> {/* 2. เพิ่มเส้นขอบดำรอบการ์ด */}
-      
+
       {/* ฝั่งซ้าย: รูปภาพ */}
       <div className="relative w-1/2 h-44 flex flex-row"> {/* 3. กำหนดความกว้างรูปเป็น 50% และเพิ่มความสูง h-44 */}
         <img
@@ -336,7 +323,7 @@ export default function MapClient() {
 
       {/* ฝั่งขวา: เนื้อหา */}
       <div className="w-1/2 p-2 flex flex-col justify-between relative bg-[#FDFCF7]"> {/* 4. ใส่สีพื้นหลังครีมอ่อนๆ และใช้ flex-col กระจายเนื้อหา */}
-        
+
         {/* ส่วนหัว: Active Now */}
         <div>
           <div className="inline-block bg-[#98B661] text-white px-2 py-1 rounded-full text-[8px] font-bold border border-black mb-2">

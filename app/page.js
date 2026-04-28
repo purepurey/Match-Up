@@ -6,9 +6,9 @@ export default function LoginPage() {
     <div className="w-full max-w-md px-6 pb-8 flex flex-col">
       {/* Hero Image Area */}
       <div className="relative flex justify-center items-center mt-4 mb-6" style={{ height: 280 }}>
-        <img 
-        src="/login.png" 
-        alt="Login Hero" 
+        <img
+        src="/login.png"
+        alt="Login Hero"
         className="w-auto h-full object-contain" />
       </div>
 
