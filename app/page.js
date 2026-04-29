@@ -11,6 +11,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
 
+{/*added code for login page, can be removed if not needed*/}
   function handleSignIn(e) {
     e.preventDefault()
     if (isValidLogin(email, password)) {

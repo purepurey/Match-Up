@@ -101,7 +101,7 @@ export default function CreatePage() {
                 }`}
               >
                 <span className="text-2xl leading-none">{sport.icon}</span>
-                <span className="text-[9px] text-black font-medium">{sport.label}</span>
+                <span className="text-[9px] text-black font-semibold">{sport.label}</span>
               </button>
             )
           })}

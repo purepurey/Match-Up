@@ -12,7 +12,7 @@ const PIN_ICON = L.divIcon({
       <circle cx="18" cy="18" r="7" fill="#FFFFFF" stroke="#000" stroke-width="1.5"/>
     </svg>
   `,
-  iconSize: [36, 48],
+  iconSize: [20, 35],
   iconAnchor: [18, 48],   // ปลายแหลมพินอยู่ตรงตำแหน่งที่คลิก
   popupAnchor: [0, -48],
   className: 'location-picker-pin',

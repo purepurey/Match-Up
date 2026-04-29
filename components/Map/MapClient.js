@@ -54,9 +54,9 @@ function createCustomMarker(venue, isSelected = false) {
   const bgColor = isSelected ? 'linear-gradient(135deg, #fff3e0, #ffe0b2)' : 'linear-gradient(135deg, #ffffff, #ffffff)';
   const pulseColor = 'rgba(76, 175, 80, 0.7)';
   const pulseColorTransparent = 'rgba(76, 175, 80, 0)';
-  // ใช้ id เฉยๆ ไม่ใส่ Date.now() เพราะทำให้ animation reset ทุกครั้ง
   const animationName = `pulse-${venue.id}`;
 
+// Animation Pulse Effect โดยการใช้ bow-shadow แล้วค่อยๆขยายตามเปอร์เซ็นต์
   const html = `
     <style>
       @keyframes ${animationName} {
@@ -65,6 +65,9 @@ function createCustomMarker(venue, isSelected = false) {
         100% { box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 0 ${pulseColor}; }
       }
       .marker-circle-${venue.id} { animation: ${animationName} 2s infinite; }
+
+// Marker Style 
+
     </style>
     <div style="width:80px; text-align:center; cursor:pointer;">
       <div class="marker-circle-${venue.id}" style="
@@ -132,9 +135,9 @@ export default function MapClient() {
     map.current.setView([activeUserVenue.lat, activeUserVenue.lon], 15);
     setSelectedVenue(activeUserVenue);
     const point = map.current.latLngToContainerPoint([activeUserVenue.lat, activeUserVenue.lon]);
-    setPopupPos({ x: point.x, y: point.y });
+    setPopupPos({ x: point.x, y: point.y }); 
   }
-
+  
   // กด JOIN NOW — บาสไปเล่น minigame, กีฬาอื่น join ตรงๆ
   function handleJoinNow(venue) {
     if (!venue) return;
@@ -398,7 +401,7 @@ export default function MapClient() {
     style={{
       left: `${popupPos.x}px`,
       top: `${popupPos.y}px`,
-      transform: 'translate(50px, -72%)',
+      transform: 'translate(50px, -72%)', // Popup อยู่ตรงกลางของ marker แล้วขยับไป 50px
       opacity: markerOpacity,
     }}
   >
@@ -488,7 +491,7 @@ export default function MapClient() {
 
       {/* Bottom Sheet (Detail Panel) — slide up from bottom */}
       <div
-        className={`fixed left-0 right-0 z-[9998] bg-white border border-black rounded-t-3xl shadow-2xl pointer-events-${detailVenue ? 'auto' : 'none'} transition-transform duration-300 ease-out`}
+        className={`fixed left-0 right-0 z-[9998] bg-white border border-black shadow-2xl pointer-events-${detailVenue ? 'auto' : 'none'} transition-transform duration-300 ease-out`}
         style={{
           bottom: '64px', // ให้อยู่เหนือปุ่ม Create New Event
           maxHeight: 'calc(100vh - 64px)',
@@ -508,15 +511,15 @@ export default function MapClient() {
             </button>
 
             {/* Image */}
-            <div className="px-4 pt-1">
+            <div className=" ">
               {detailVenue.image ? (
                 <img
                   src={detailVenue.image}
                   alt={detailVenue.name}
-                  className="w-full h-48 object-cover border border-black rounded-md"
+                  className="w-full h-48 object-cover border border-black"
                 />
               ) : (
-                <div className="w-full h-48 bg-gradient-to-br from-[#F8B347] to-[#FFD180] border border-black rounded-md flex items-center justify-center text-7xl">
+                <div className="w-full h-48 bg-gradient-to-br from-[#F8B347] to-[#FFD180] border border-black flex items-center justify-center text-7xl">
                   {detailVenue.icon}
                 </div>
               )}
