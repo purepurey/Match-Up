@@ -10,7 +10,7 @@ const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const SAMPLE_VENUES = [
   {
     id: '1',
-    name: 'หาตี้เล่นบาส 5v5 ครับ',
+    name: 'Looking for 5v5 basketball!',
     nameEn: 'Urupong Basketball Court',
     location: 'Urupong, Bangkok',
     category: 'BASKETBALL',
@@ -19,13 +19,13 @@ const SAMPLE_VENUES = [
     lon: 100.5018,
     count: 1,
     total: 10,
-    image: 'location/urupong.jpg',
+    image: '/location/urupong.jpg',
     icon: '🏀',
     isActive: true,
   },
   {
     id: '2',
-    name: 'หาคนแทงสนุ๊กเดือดๆคับ',
+    name: 'Snooker night — bring your A-game',
     nameEn: 'Playbox',
     location: 'Siam, Bangkok',
     category: 'SNOOKER',
@@ -34,7 +34,7 @@ const SAMPLE_VENUES = [
     lon: 100.53,
     count: 4,
     total: 8,
-    image: 'location/snooker.jpg',
+    image: '/location/snooker.jpg',
     icon: '🎱',
     isActive: true,
   },
@@ -54,9 +54,9 @@ function createCustomMarker(venue, isSelected = false) {
   const bgColor = isSelected ? 'linear-gradient(135deg, #fff3e0, #ffe0b2)' : 'linear-gradient(135deg, #ffffff, #ffffff)';
   const pulseColor = 'rgba(76, 175, 80, 0.7)';
   const pulseColorTransparent = 'rgba(76, 175, 80, 0)';
+  // ใช้ id เฉยๆ ไม่ใส่ Date.now() เพราะทำให้ animation reset ทุกครั้ง
   const animationName = `pulse-${venue.id}`;
 
-// Animation Pulse Effect โดยการใช้ bow-shadow แล้วค่อยๆขยายตามเปอร์เซ็นต์
   const html = `
     <style>
       @keyframes ${animationName} {
@@ -65,9 +65,6 @@ function createCustomMarker(venue, isSelected = false) {
         100% { box-shadow: 0 2px 8px rgba(0,0,0,0.15), 0 0 0 0 ${pulseColor}; }
       }
       .marker-circle-${venue.id} { animation: ${animationName} 2s infinite; }
-
-// Marker Style 
-
     </style>
     <div style="width:80px; text-align:center; cursor:pointer;">
       <div class="marker-circle-${venue.id}" style="
@@ -105,7 +102,7 @@ export default function MapClient() {
   const mapContainer = useRef(null);
   const map = useRef(null);
   const markersRef = useRef([]);
-  const [query, setQuery] = useState('Bangkok');
+  const [query, setQuery] = useState('');
   const [locationLabel, setLocationLabel] = useState('Thailand, Bangkok');
   const [error, setError] = useState('');
   const [isSearching, setIsSearching] = useState(false);
@@ -135,9 +132,9 @@ export default function MapClient() {
     map.current.setView([activeUserVenue.lat, activeUserVenue.lon], 15);
     setSelectedVenue(activeUserVenue);
     const point = map.current.latLngToContainerPoint([activeUserVenue.lat, activeUserVenue.lon]);
-    setPopupPos({ x: point.x, y: point.y }); 
+    setPopupPos({ x: point.x, y: point.y });
   }
-  
+
   // กด JOIN NOW — บาสไปเล่น minigame, กีฬาอื่น join ตรงๆ
   function handleJoinNow(venue) {
     if (!venue) return;
@@ -145,21 +142,31 @@ export default function MapClient() {
     const isBasketball =
       venue.category?.toUpperCase() === 'BASKETBALL' || venue.icon === '🏀';
     if (isBasketball) {
+      // ส่ง venue เดิม (ไม่ +1) — minigame page จะ +1 เองหลัง join สำเร็จ
       try { localStorage.setItem('pendingJoinVenue', JSON.stringify(venue)); } catch {}
       setSelectedVenue(null);
       setDetailVenue(null);
       router.push('/joinbasketball');
     } else {
-      try { localStorage.setItem('activeJoinedVenue', JSON.stringify(venue)); } catch {}
-      setActiveJoinedVenue(venue);
+      // Direct join — +1 ทันที + จำ originalCount เพื่อ revert ตอน leave
+      const joinedBumped = { ...venue, count: venue.count + 1, originalCount: venue.count };
+      try { localStorage.setItem('activeJoinedVenue', JSON.stringify(joinedBumped)); } catch {}
+      setActiveJoinedVenue(joinedBumped);
+      setAllVenues((prev) =>
+        prev.map((v) => (v.id === venue.id ? { ...v, count: v.count + 1 } : v))
+      );
       setSelectedVenue(null);
       setDetailVenue(null);
     }
   }
 
-  // กด LEAVE — ออกจาก event ที่ join อยู่
+  // กด LEAVE — ออกจาก event ที่ join อยู่ + คืน count กลับเป็นเดิม
   function handleLeave() {
     if (!activeJoinedVenue) return;
+    const originalCount = activeJoinedVenue.originalCount ?? activeJoinedVenue.count - 1;
+    setAllVenues((prev) =>
+      prev.map((v) => (v.id === activeJoinedVenue.id ? { ...v, count: originalCount } : v))
+    );
     if (selectedVenue?.id === activeJoinedVenue.id) setSelectedVenue(null);
     if (detailVenue?.id === activeJoinedVenue.id) setDetailVenue(null);
     setActiveJoinedVenue(null);
@@ -213,7 +220,7 @@ export default function MapClient() {
     });
   }, [markerOpacity]);
 
-  // อัพเดท icon เฉพาะเมื่อ selectedVenue เปลี่ยน
+  // อัพเดท icon เมื่อ selection หรือ count (allVenues) เปลี่ยน
   useEffect(() => {
     markersRef.current.forEach((marker, idx) => {
       const venue = allVenues[idx];
@@ -221,7 +228,7 @@ export default function MapClient() {
       const isSelected = selectedVenue?.id === venue.id;
       marker.setIcon(createCustomMarker(venue, isSelected));
     });
-  }, [selectedVenue]);
+  }, [selectedVenue, allVenues]);
 
   useEffect(() => {
     if (map.current) return;
@@ -248,7 +255,13 @@ export default function MapClient() {
       if (raw) joinedVenue = JSON.parse(raw);
     } catch {}
 
-    const venuesToRender = userVenue ? [...SAMPLE_VENUES, userVenue] : SAMPLE_VENUES;
+    let venuesToRender = userVenue ? [...SAMPLE_VENUES, userVenue] : SAMPLE_VENUES;
+    // ถ้ามี activeJoinedVenue → sync count ที่ +1 แล้วเข้ากับ venue ตัวที่ตรงกัน
+    if (joinedVenue) {
+      venuesToRender = venuesToRender.map((v) =>
+        v.id === joinedVenue.id ? { ...v, count: joinedVenue.count } : v
+      );
+    }
     setAllVenues(venuesToRender);
     setActiveUserVenue(userVenue);
     setActiveJoinedVenue(joinedVenue);
@@ -299,20 +312,36 @@ export default function MapClient() {
   async function handleSearch(e) {
     e.preventDefault();
     const trimQuery = query.trim();
-    if (!trimQuery || !map.current) return;
+    if (!trimQuery || !map.current) {
+      if (!trimQuery) setError('Please enter a place name');
+      return;
+    }
 
     setError('');
     setIsSearching(true);
 
-    try {
-      const response = await fetch(
-        `${NOMINATIM_URL}?q=${encodeURIComponent(trimQuery)}&format=json&limit=1&addressdetails=1`,
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      const results = await response.json();
+    // ลองค้นหาหลายแบบ — ไทย/อังกฤษ + ไม่จำกัด, ถ้ายังไม่เจอเพิ่ม ", Thailand"
+    async function tryFetch(q) {
+      const params = new URLSearchParams({
+        q,
+        format: 'json',
+        limit: '5',
+        addressdetails: '1',
+      });
+      const res = await fetch(`${NOMINATIM_URL}?${params}`);
+      const data = await res.json();
+      return Array.isArray(data) ? data : [];
+    }
 
-      if (!Array.isArray(results) || results.length === 0) {
-        setError('No location found.');
+    try {
+      let results = await tryFetch(trimQuery);
+      if (results.length === 0) {
+        // retry: เติม "Thailand" เพื่อช่วยให้ Nominatim หาเจอ
+        results = await tryFetch(`${trimQuery}, Thailand`);
+      }
+
+      if (results.length === 0) {
+        setError('No place found — try another name');
         return;
       }
 
@@ -322,13 +351,23 @@ export default function MapClient() {
       const label = formatLocation(location.address, location.display_name);
 
       setLocationLabel(label);
-      map.current.setView([lat, lon], 13);
+      // ใช้ flyTo ให้ดู smooth + เก็บ zoom ปัจจุบัน
+      const currentZoom = map.current.getZoom();
+      const targetZoom = currentZoom < 13 ? 13 : currentZoom;
+      map.current.flyTo([lat, lon], targetZoom, { duration: 0.8 });
       setShowInput(false);
+      setQuery(''); // เคลียร์เพื่อรอบถัดไป
     } catch (err) {
-      setError('Search failed, please try again.');
+      setError('Search failed — please try again');
     } finally {
       setIsSearching(false);
     }
+  }
+
+  function closeSearch() {
+    setShowInput(false);
+    setError('');
+    setQuery('');
   }
 
   return (
@@ -345,7 +384,7 @@ export default function MapClient() {
 
             {/* Profile Image */}
             <img
-              src="/profile_placeholder.avif"
+              src="/blank_profile.webp"
               alt="profile"
               className="w-12 h-12 rounded-full object-cover flex-shrink-0 border-2 border-gray-400"
             />
@@ -353,13 +392,26 @@ export default function MapClient() {
             {/* Location Info หรือ Input */}
             <div className="flex-1 min-w-0">
               {showInput ? (
-                <input
-                  autoFocus
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="w-full text-sm outline-none border-b border-gray-400 pb-0.5 text-black"
-                  placeholder="ค้นหาสถานที่..."
-                />
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Escape') closeSearch(); }}
+                    className="flex-1 text-sm outline-none border-b border-gray-400 pb-0.5 text-black bg-transparent"
+                    placeholder="Search places..."
+                  />
+                  {query && (
+                    <button
+                      type="button"
+                      onClick={() => setQuery('')}
+                      aria-label="Clear"
+                      className="text-gray-500 hover:text-black px-1 text-base leading-none"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
               ) : (
                 <>
                   <div className="flex items-center gap-1">
@@ -371,17 +423,33 @@ export default function MapClient() {
                   <p className="text-xs text-gray-500 truncate">{locationLabel}</p>
                 </>
               )}
-              {error && <p className="text-xs text-red-500 mt-0.5">{error}</p>}
+              {error && <p className="text-xs text-red-600 mt-0.5 font-bold">{error}</p>}
             </div>
+
+            {/* Cancel button — โผล่ตอน input เปิดอยู่ */}
+            {showInput && (
+              <button
+                type="button"
+                onClick={closeSearch}
+                aria-label="Cancel search"
+                className="flex-shrink-0 text-xs font-bold text-gray-700 hover:text-black px-1"
+              >
+                CANCEL
+              </button>
+            )}
 
             {/* Search Button */}
             <button
               type={showInput ? 'submit' : 'button'}
               onClick={() => { if (!showInput) setShowInput(true); }}
-              className="flex-shrink-0 rounded-full hover:bg-gray-100 transition-colors border border-gray-950 p-2 bg-white"
+              disabled={isSearching}
+              aria-label={showInput ? 'Search' : 'Open search'}
+              className="flex-shrink-0 rounded-full hover:bg-gray-100 transition-colors border border-gray-950 p-2 bg-white disabled:opacity-50"
             >
               {isSearching ? (
-                <span className="text-xs text-gray-500">...</span>
+                <svg width="20" height="20" viewBox="0 0 24 24" className="animate-spin">
+                  <circle cx="12" cy="12" r="10" stroke="#333" strokeWidth="3" fill="none" strokeDasharray="40" strokeDashoffset="20" strokeLinecap="round"/>
+                </svg>
               ) : (
                 <svg width="20" height="20" viewBox="0 0 16 16" fill="none">
                   <circle cx="7" cy="7" r="5" stroke="#333" strokeWidth="1.5"/>
@@ -397,11 +465,11 @@ export default function MapClient() {
       {/* Popup Card — ไม่มี overlay ทับ map แล้ว ลาก/zoom map ได้ตามปกติ */}
 {selectedVenue && (
   <div
-    className="fixed w-[420px] z-[99999] pointer-events-auto transition-opacity duration-300" // 1. เพิ่มความกว้างการ์ด (จาก w-80 เป็น 420px หรือตามต้องการ)
+    className="fixed w-[280px] z-[99999] pointer-events-auto transition-opacity duration-300"
     style={{
       left: `${popupPos.x}px`,
       top: `${popupPos.y}px`,
-      transform: 'translate(50px, -72%)', // Popup อยู่ตรงกลางของ marker แล้วขยับไป 50px
+      transform: 'translate(30px, -72%)',
       opacity: markerOpacity,
     }}
   >
@@ -410,56 +478,56 @@ export default function MapClient() {
       type="button"
       onClick={() => setSelectedVenue(null)}
       aria-label="Close"
-      className="absolute -top-2 -right-2 z-10 w-7 h-7 rounded-full bg-white border border-black flex items-center justify-center shadow-md hover:bg-gray-100"
+      className="absolute -top-2 -right-2 z-10 w-6 h-6 rounded-full bg-white border border-black flex items-center justify-center shadow-md hover:bg-gray-100"
     >
-      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+      <svg width="10" height="10" viewBox="0 0 12 12" fill="none">
         <path d="M2 2L10 10M10 2L2 10" stroke="#000" strokeWidth="1.8" strokeLinecap="round"/>
       </svg>
     </button>
 
-    <div className="bg-white rounded-xl overflow-hidden shadow-xl flex flex-row border border-black"> {/* 2. เพิ่มเส้นขอบดำรอบการ์ด */}
+    <div className="bg-white rounded-xl overflow-hidden shadow-xl flex flex-row border border-black">
 
-      {/* ฝั่งซ้าย: รูปภาพ */}
-      <div className="relative w-1/2 h-44 flex flex-row"> {/* 3. กำหนดความกว้างรูปเป็น 50% และเพิ่มความสูง h-44 */}
+      {/* ฝั่งซ้าย: รูปภาพ — ไม่ใส่ h-28 ปล่อยให้ stretch ตาม flex-row parent */}
+      <div className="relative w-2/5 flex-shrink-0 border-r border-black overflow-hidden self-stretch">
         {selectedVenue.image ? (
           <img
             src={selectedVenue.image}
             alt={selectedVenue.name}
-            className="w-full h-full object-cover border-r border-black"
+            className="absolute inset-0 w-full h-full object-cover"
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-[#F8B347] to-[#FFD180] border-r border-black flex items-center justify-center text-6xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-[#F8B347] to-[#FFD180] flex items-center justify-center text-4xl">
             {selectedVenue.icon}
           </div>
         )}
       </div>
 
       {/* ฝั่งขวา: เนื้อหา */}
-      <div className="w-1/2 p-2 flex flex-col justify-between relative bg-[#FDFCF7]"> {/* 4. ใส่สีพื้นหลังครีมอ่อนๆ และใช้ flex-col กระจายเนื้อหา */}
+      <div className="w-3/5 p-1.5 flex flex-col justify-between relative bg-[#FDFCF7] min-w-0">
 
         {/* ส่วนหัว: Active Now */}
-        <div>
-          <div className="inline-block bg-[#98B661] text-white px-2 py-1 rounded-full text-[8px] font-bold border border-black mb-2">
+        <div className="min-w-0">
+          <div className="inline-block bg-[#98B661] text-white px-1.5 py-0.5 rounded-full text-[7px] font-bold border border-black mb-1">
             ACTIVE NOW!
           </div>
-          <h3 className="font-bold text-[18px] text-slate-900 leading-tight">{selectedVenue.name}</h3>
-          <p className="text-[12px] text-gray-500 font-bold">{selectedVenue.nameEn}</p>
+          <h3 className="font-bold text-[12px] text-slate-900 leading-tight line-clamp-2">{selectedVenue.name}</h3>
+          <p className="text-[9px] text-gray-500 font-bold truncate">{selectedVenue.nameEn}</p>
         </div>
 
         {/* ส่วนล่าง: จำนวนคน และ ปุ่ม */}
-        <div className="flex flex-col gap-3">
-          <div className="bg-black flex items-center justify-center gap-2 text-[10px] font-bold text-white w-max px-4 py-1.5 rounded-full">
-            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="11" height="11">
+        <div className="flex flex-col gap-1.5 mt-1">
+          <div className="bg-black flex items-center justify-center gap-1 text-[9px] font-bold text-white w-max px-2 py-0.5 rounded-full">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="9" height="9">
               <path fillRule="evenodd" d="M7.5 6a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0ZM3.751 20.105a8.25 8.25 0 0 1 16.498 0 .75.75 0 0 1-.437.695A18.683 18.683 0 0 1 12 22.5c-2.786 0-5.433-.608-7.812-1.7a.75.75 0 0 1-.437-.695Z" clipRule="evenodd" />
             </svg>
             <span>{selectedVenue.count}/{selectedVenue.total}</span>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex gap-1">
             <button
               type="button"
               onClick={() => openDetail(selectedVenue)}
-              className="flex-1 bg-[#F3F1E5] border border-black text-black py-2 rounded-full font-bold text-[12px] hover:bg-white"
+              className="flex-1 bg-[#F3F1E5] border border-black text-black py-1 rounded-full font-bold text-[9px] hover:bg-white"
             >
               DETAILS
             </button>
@@ -468,7 +536,7 @@ export default function MapClient() {
                 <button
                   type="button"
                   onClick={handleLeave}
-                  className="flex-1 bg-[#98B661] border border-black text-white py-2 rounded-full font-bold text-[12px] hover:opacity-90"
+                  className="flex-1 bg-[#98B661] border border-black text-white py-1 rounded-full font-bold text-[9px] hover:opacity-90"
                 >
                   LEAVE
                 </button>
@@ -476,7 +544,7 @@ export default function MapClient() {
                 <button
                   type="button"
                   onClick={() => handleJoinNow(selectedVenue)}
-                  className="flex-1 bg-[#98B661] border border-black text-white py-2 rounded-full font-bold text-[12px] hover:opacity-90"
+                  className="flex-1 bg-[#98B661] border border-black text-white py-1 rounded-full font-bold text-[9px] hover:opacity-90"
                 >
                   JOIN NOW
                 </button>
@@ -491,7 +559,7 @@ export default function MapClient() {
 
       {/* Bottom Sheet (Detail Panel) — slide up from bottom */}
       <div
-        className={`fixed left-0 right-0 z-[9998] bg-white border border-black shadow-2xl pointer-events-${detailVenue ? 'auto' : 'none'} transition-transform duration-300 ease-out`}
+        className={`fixed left-0 right-0 z-[9998] bg-white border border-black rounded-t-3xl shadow-2xl pointer-events-${detailVenue ? 'auto' : 'none'} transition-transform duration-300 ease-out`}
         style={{
           bottom: '64px', // ให้อยู่เหนือปุ่ม Create New Event
           maxHeight: 'calc(100vh - 64px)',
@@ -511,15 +579,15 @@ export default function MapClient() {
             </button>
 
             {/* Image */}
-            <div className=" ">
+            <div className="px-4 pt-1">
               {detailVenue.image ? (
                 <img
                   src={detailVenue.image}
                   alt={detailVenue.name}
-                  className="w-full h-48 object-cover border border-black"
+                  className="w-full h-48 object-cover border border-black rounded-md"
                 />
               ) : (
-                <div className="w-full h-48 bg-gradient-to-br from-[#F8B347] to-[#FFD180] border border-black flex items-center justify-center text-7xl">
+                <div className="w-full h-48 bg-gradient-to-br from-[#F8B347] to-[#FFD180] border border-black rounded-md flex items-center justify-center text-7xl">
                   {detailVenue.icon}
                 </div>
               )}
@@ -543,14 +611,14 @@ export default function MapClient() {
               </div>
             </div>
 
-            {/* SpTags */}
+            {/* Tags */}
             <div className="px-4 pt-3 flex items-center gap-2 flex-wrap">
-              <div className="bg-[#F8B347] text-black border border-black px-3 py-1.5 text-sm font-extrabold flex items-center gap-1.5 shadow-[0px_3px_0px_0px_rgba(0,0,0,0.25)]">
+              <div className="bg-[#F8B347] text-black border border-black px-3 py-1.5 rounded-md text-sm font-extrabold flex items-center gap-1.5 shadow-[0px_3px_0px_0px_rgba(0,0,0,1)]">
                 <span>{detailVenue.icon}</span>
                 <span>{detailVenue.category}</span>
               </div>
               {detailVenue.isActive && (
-                <div className="bg-[#98B661] text-white border border-black px-3 py-1.5 rounded-full text-sm font-semibold shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)]">
+                <div className="bg-[#C5DC8E] text-black border border-black px-3 py-1.5 rounded-full text-sm font-medium">
                   Active now
                 </div>
               )}
@@ -558,7 +626,7 @@ export default function MapClient() {
 
             {/* Date / time */}
             <div className="px-4 pt-3">
-              <div className="border border-black px-4 py-2 text-xs font-bold text-black inline-block">
+              <div className="border border-black rounded-md px-4 py-2 text-base font-bold text-black inline-block">
                 {detailVenue.dateTime}
               </div>
             </div>
@@ -569,7 +637,7 @@ export default function MapClient() {
                 <button
                   type="button"
                   onClick={removeActiveVenue}
-                  className="w-2/3 bg-[#EA4335] border border-black text-white font-extrabold text-base py-3 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                  className="w-2/3 bg-[#98B661] border border-black text-black font-extrabold text-base py-3 rounded-md shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
                 >
                   CANCEL EVENT
                 </button>
@@ -577,7 +645,7 @@ export default function MapClient() {
                 <button
                   type="button"
                   onClick={handleLeave}
-                  className="w-2/3 bg-[#EA4335] border border-black text-white font-extrabold text-base py-3 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                  className="w-2/3 bg-[#98B661] border border-black text-black font-extrabold text-base py-3 rounded-md shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
                 >
                   LEAVE
                 </button>
@@ -585,7 +653,7 @@ export default function MapClient() {
                 <button
                   type="button"
                   onClick={() => handleJoinNow(detailVenue)}
-                  className="w-2/3 bg-[#98B661] border border-black text-white font-extrabold text-base py-3 shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
+                  className="w-2/3 bg-[#98B661] border border-black text-black font-extrabold text-base py-3 rounded-md shadow-[0px_4px_0px_0px_rgba(0,0,0,1)] hover:opacity-90 active:translate-y-[2px] active:shadow-[0px_2px_0px_0px_rgba(0,0,0,1)] transition-all"
                 >
                   JOIN NOW
                 </button>

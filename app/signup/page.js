@@ -3,21 +3,34 @@
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
-import { isValidLogin } from './credentials'
+import { emailExists, registerUser } from '../credentials'
 
-export default function LoginPage() {
+export default function SignUpPage() {
   const router = useRouter()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
 
-  function handleSignIn(e) {
+  function handleSignUp(e) {
     e.preventDefault()
-    if (isValidLogin(email, password)) {
-      router.push('/home')
-    } else {
-      setError('Invalid email or password')
+    setError('')
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters')
+      return
     }
+    if (password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
+    if (emailExists(email)) {
+      setError('This email is already registered')
+      return
+    }
+
+    registerUser(email.trim(), password)
+    router.push('/home')
   }
 
   return (
@@ -27,17 +40,17 @@ export default function LoginPage() {
       <div className="relative flex justify-center items-center mt-4 mb-6" style={{ height: 280 }}>
         <img
         src="/login.png"
-        alt="Login Hero"
+        alt="Sign Up Hero"
         className="w-auto h-full object-contain" />
       </div>
 
       {/* Title */}
-      <h1 className="text-2xl font-extrabold text-black mb-1">Let's Match Up!</h1>
+      <h1 className="text-2xl font-extrabold text-black mb-1">Join the Game!</h1>
       <p className="text-sm text-black mb-6 leading-relaxed">
-        Today is your game. Go find your match.<br/>Sign in to start playing.
+        Create your account in seconds.<br/>Your next match is one tap away.
       </p>
 
-      <form onSubmit={handleSignIn}>
+      <form onSubmit={handleSignUp}>
         {/* Email */}
         <label className="text-sm font-medium text-black mb-1 block">Email</label>
         <input
@@ -56,40 +69,48 @@ export default function LoginPage() {
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="At least 8 characters"
+          className="w-full bg-[#F3F2EB] border border-gray-950 px-4 py-3 text-sm text-black placeholder:text-gray-500 outline-none mb-4 focus:border-gray-500"
+          required
+        />
+
+        {/* Confirm Password */}
+        <label className="text-sm font-medium text-black mb-1 block">Confirm Password</label>
+        <input
+          type="password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          placeholder="Re-enter your password"
           className="w-full bg-[#F3F2EB] border border-gray-950 px-4 py-3 text-sm text-black placeholder:text-gray-500 outline-none mb-2 focus:border-gray-500"
           required
         />
 
-        {/* Forgot Password */}
-        <div className="flex justify-end mb-4">
-          <a href="#" className="text-sm text-[#1E4AE9]">Forgot Password?</a>
-        </div>
+        {/* Spacer to match sign-in's "Forgot Password" margin */}
+        <div className="mb-4" />
 
         {/* Error */}
         {error && (
           <p className="text-sm text-red-600 mb-3 text-center">{error}</p>
         )}
 
-        {/* Sign In Button */}
+        {/* Sign Up Button */}
         <button
           type="submit"
           className="w-full bg-[#162D3A] text-white py-4 font-light text-base mb-6 block text-center hover:opacity-90"
         >
-          Sign in
+          Sign up
         </button>
       </form>
 
       {/* Divider */}
       <div className="flex items-center gap-3 mb-4">
         <div className="flex-1 h-px bg-[#CFDFE2]"/>
-        <span className="text-sm text-[#294957]">Or sign in with</span>
+        <span className="text-sm text-[#294957]">Or sign up with</span>
         <div className="flex-1 h-px bg-[#CFDFE2]"/>
       </div>
 
       {/* Social Buttons */}
-
-      {/* Google */}
       <div className="flex gap-3 mb-6 ">
+        {/* Google */}
         <button className="flex-1 flex items-center justify-center gap-2 bg-[#F3F2EB] py-3 text-sm font-medium text-[#294957] shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)]">
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
@@ -109,10 +130,10 @@ export default function LoginPage() {
         </button>
       </div>
 
-      {/* Sign Up */}
+      {/* Sign In link */}
       <p className="text-center text-sm text-[#294957]">
-        Don't you have an account?{' '}
-        <Link href="/signup" className="text-[#1E4AE9] font-medium">Sign up</Link>
+        Already have an account?{' '}
+        <Link href="/" className="text-[#1E4AE9] font-medium">Sign in</Link>
       </p>
       </div>
     </main>

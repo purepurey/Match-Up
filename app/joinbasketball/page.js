@@ -44,7 +44,13 @@ export default function JoinBasketballPage() {
     setTimeout(() => {
       if (venue) {
         try {
-          localStorage.setItem('activeJoinedVenue', JSON.stringify(venue))
+          // +1 count + จำ originalCount เพื่อให้ leave revert ได้
+          const joinedBumped = {
+            ...venue,
+            count: (venue.count ?? 0) + 1,
+            originalCount: venue.count ?? 0,
+          }
+          localStorage.setItem('activeJoinedVenue', JSON.stringify(joinedBumped))
           localStorage.removeItem('pendingJoinVenue')
         } catch {}
       }
@@ -73,10 +79,10 @@ export default function JoinBasketballPage() {
         alt=""
         className="absolute pointer-events-none"
         style={{
-          top: '15%',
+          top: '24%',
           left: '50%',
           transform: 'translateX(-50%)',
-          width: '40%',
+          width: '55%',
           maxWidth: '300px',
         }}
         onError={(e) => { e.currentTarget.style.display = 'none' }}
@@ -105,7 +111,7 @@ export default function JoinBasketballPage() {
           width: phase === 'idle' ? '60%' : '18%',
           left: '50%',
           bottom: phase === 'idle' ? '0' : 'auto',
-          top: phase === 'idle' ? 'auto' : '5%',
+          top: phase === 'idle' ? 'auto' : '15%',
           transform: phase === 'idle'
             ? 'translate(-50%, 50%) rotate(0deg)' // ดันลงครึ่งลูก → เห็นแค่ครึ่งบน
             : 'translateX(-50%) rotate(720deg)',
@@ -131,7 +137,7 @@ export default function JoinBasketballPage() {
       <button
         type="button"
         onClick={() => router.push('/home')}
-        className="absolute top-4 right-4 bg-white text-black text-xs font-bold border border-black px-3 py-1.5 rounded-full pointer-events-auto hover:bg-neutral-200 hover:text-black transition-colors shadow-[0px_4px_0px_0px_rgba(0,0,0,0.25)]"
+        className="absolute top-4 right-4 bg-black/70 text-white text-xs font-bold px-3 py-1.5 rounded-full pointer-events-auto"
       >
         CANCEL
       </button>
